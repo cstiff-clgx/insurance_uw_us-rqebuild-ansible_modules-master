@@ -1,0 +1,54 @@
+- name: "Create temp dir"
+  win_file:
+    state: directory
+    path: "{{ temp_dir }}"
+
+- name: Install 7zip and use a file version for the installation check
+  win_package:
+    path: "{{ zip_url }}"
+    creates_path: C:\Program Files\7-Zip\7z.exe
+    arguments: /S
+    product_id: 7-Zip
+    state: present
+  become_method: runas
+
+- name: "Get info for OpenSSH Server"
+  win_service:
+    name: sshd
+  register: service_info
+
+- name: "Remove OpenSSH Server if exists"
+  win_service:
+    name: sshd
+    state: absent
+  when: service_info.exists|bool == True
+
+- name: "Download OpenSSH Server"
+  win_get_url:
+    url: "{{ openssh_server_package }}"
+    dest: "{{ temp_dir }}\\{{ openssh_server_name }}"
+
+- name: "UnZip OpenSSH Server"
+  win_command: '"C:\\Program Files\\7-Zip\\7z.exe" x {{ temp_dir }}\{{ openssh_server_name }} -oC:\ -y'
+
+- name: "Install OpenSSH Server"
+  win_shell: 'C:\OpenSSH-Win64\install-sshd.ps1 >> C:\OpenSSH-Win64\install_log.txt'
+  args:
+    chdir: 'C:\OpenSSH-Win64\'
+
+- name: Copy ssh config
+  win_copy:
+    src: 'c:\OpenSSH-Win64\sshd_config_default'
+    dest: 'c:\OpenSSH-Win64\sshd_config'
+    remote_src: yes
+
+- name: "Install OpenSSH Server"
+  win_shell: 'C:\OpenSSH-Win64\FixHostFilePermissions.ps1 -confirm:$false >> C:\OpenSSH-Win64\install_log.txt'
+  args:
+    chdir: 'C:\OpenSSH-Win64\'
+
+- name: "Start OpenSSH Server service"
+  win_service:
+    name: sshd
+    state: restarted
+    start_mode: auto

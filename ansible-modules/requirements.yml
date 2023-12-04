@@ -1,0 +1,4 @@
+---
+roles:
+  - src: "git+git@github.com:corelogic/insurance_uw_us-rqebuild-ansible_modules"
+    version: master

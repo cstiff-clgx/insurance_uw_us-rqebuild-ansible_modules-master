@@ -1,0 +1,6 @@
+- hosts: localhost
+  tasks:
+  - name: Ansible Destroy Playbook Message
+    debug:
+      msg: "Ansible Destroy Message"
+    run_once: true
