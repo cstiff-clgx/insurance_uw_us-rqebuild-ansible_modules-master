@@ -1,0 +1,18 @@
+plugin: gcp_compute
+projects:
+- clgx-rqebuild-data-uat-5738
+filters:
+   - status="RUNNING"
+   - labels.purpose="db"
+   - labels.environment="uat"
+hostnames:
+  - name
+  - private_ip
+compose:
+  ansible_host: networkInterfaces[0].networkIP
+
+inventory_ip_type:
+- internal
+auth_kind: serviceaccount
+keyed_groups:
+  - key: labels.prefix

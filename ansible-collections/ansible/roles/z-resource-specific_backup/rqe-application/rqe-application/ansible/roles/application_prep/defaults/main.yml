@@ -1,0 +1,30 @@
+application_regedit:
+      - { name: "MaxIdleTime", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "5200000"}
+      - { name: "MaxDisconnectionTime", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "86400000"}
+      - { name: "RemoteAppLogoffTimeLimit", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "0"}
+      - { name: "fResetBroken", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "0"}
+      - { name: "NoAutoUpdate", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', value: "1"}
+      - { name: "TcpTimedWaitDelay", path: 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters', value: "30"}
+      - { name: "MaxUserPort", path: 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters', value: "32767"}
+
+application_firewall:
+      - { name: "Application HTTP", port: "80", protocol: "tcp"}
+      - { name: "Application HTTP/Tomcat", port: "8080", protocol: "tcp"}
+      - { name: "Application HTTP/ICMS", port: "88", protocol: "tcp"}
+      - { name: "Application Streaming", port: "5932", protocol: "tcp"}
+      - { name: "RQE API Manager", port: "50051", protocol: "tcp"}
+      - { name: "OpenSSH", port: "22", protocol: "tcp"}
+
+rqeshared:
+      - 'D:\RqeShared'
+      - 'D:\RqeShared\Analysis'
+      - 'D:\RqeShared\Database'
+      - 'D:\RqeShared\ImportFilePath'
+      - 'D:\RqeShared\RQETemp'
+      - 'D:\RqeShared\Temp'
+      - 'D:\RqeShared\UploadFiles'
+      - 'D:\RqeShared\Analysis\EngineTemp'
+      - 'D:\RqeShared\Analysis\Reports'
+      - 'D:\RqeShared\Database\ProcedureLogs'
+      - 'D:\RqeShared\Database\ProcedureLogs\EDB'
+      - 'D:\RqeShared\Database\ProcedureLogs\IDB'

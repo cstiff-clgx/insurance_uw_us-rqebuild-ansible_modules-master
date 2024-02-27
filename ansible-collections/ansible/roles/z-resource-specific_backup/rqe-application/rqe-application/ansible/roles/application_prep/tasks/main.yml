@@ -1,0 +1,73 @@
+- name: Apply regedit application changes
+  win_regedit:
+    path: "{{ item.path}}"
+    name: "{{ item.name}}"
+    data: "{{ item.value }}"
+    type: dword
+  loop: "{{ application_regedit }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create firewall rules for application access
+  win_firewall_rule:
+    name: "{{ item.name}}"
+    localport: "{{ item.port}}"
+    action: allow
+    direction: in
+    protocol: "{{ item.protocol}}"
+    profiles: domain,private,public
+    state: present
+    enabled: yes
+  loop: "{{ application_firewall }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install .NET Framework 3.5
+  win_feature:
+    name: NET-Framework-Features
+    state: present
+
+- name: Install .NET Framework 4.5 Features
+  win_feature:
+    name: NET-Framework-45-Features
+    state: present
+    include_sub_features: True
+
+- name: Disable UAC
+  win_shell: |
+    New-ItemProperty -Path HKLM:Software\Microsoft\Windows\CurrentVersion\policies\system -Name EnableLUA -PropertyType DWord -Value 0 -Force
+
+- name: Add PxPoint to system path
+  win_path:
+    elements:
+    - 'D:\Program Files\PxPoint\bin'
+
+- name: Create RQEShared directories
+  win_file:
+    state: directory
+    path: "{{ item }}"
+  loop: "{{ rqeshared }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Add RQETemp
+  win_environment:
+    state: present
+    name: RQETemp
+    value: 'D:\RQEShared\RQETemp'
+    level: machine
+
+- name: Add public RQEShared
+  win_share:
+    name: RqeShared
+    description: RqeShared
+    path: 'D:\RQEShared'
+    list: yes
+    full: Everyone
+    state: present
+
+- name: Disable IIS and make sure it is NOT running
+  win_service:
+    name: W3Svc
+    state: stopped
+    start_mode: disabled

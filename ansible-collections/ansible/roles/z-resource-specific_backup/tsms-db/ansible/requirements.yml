@@ -1,0 +1,5 @@
+---
+collections:
+  - source: git+https://github.com/linux-system-roles/mssql.git
+  - type: git
+  - version: 2.2.0

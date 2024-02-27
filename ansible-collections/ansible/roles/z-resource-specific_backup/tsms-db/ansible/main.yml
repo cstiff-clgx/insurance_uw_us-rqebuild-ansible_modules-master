@@ -1,0 +1,17 @@
+- name: Configure tsms-db
+  hosts: "tsms-{{ lookup('env', 'PREFIX') }}-db"
+  become: true
+  vars:
+    prefix: "{{ lookup('env', 'PREFIX') }}"
+    tsmsdb_data_drive_path: /tsmsdb
+    mssql_password: "sa_pa$$w0rd"
+    rqe_backup: "{{ lookup('env', 'RQE_BACKUP') }}"
+    rqe_version: "{{ lookup('env', 'RQE_VERSION') }}"
+    oasis_backup: "{{ lookup('env', 'OASIS_BACKUP') }}"
+    pds_backup: "{{ lookup('env', 'PDS_BACKUP') }}"
+
+
+  roles:
+    - role: make_partition
+    - role: install_mssql
+

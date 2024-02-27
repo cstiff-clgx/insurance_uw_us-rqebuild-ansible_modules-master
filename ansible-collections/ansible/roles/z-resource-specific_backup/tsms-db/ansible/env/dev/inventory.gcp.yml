@@ -1,0 +1,18 @@
+plugin: gcp_compute
+projects:
+  - clgx-rqebuild-data-dev-0148
+filters:
+  - status="RUNNING"
+  - labels.purpose="tsms-db"
+  - labels.environment="dev"
+hostnames:
+  - name
+  - private_ip
+compose:
+  ansible_host: networkInterfaces[0].networkIP
+
+inventory_ip_type:
+  - internal
+auth_kind: serviceaccount
+keyed_groups:
+  - key: labels.prefix

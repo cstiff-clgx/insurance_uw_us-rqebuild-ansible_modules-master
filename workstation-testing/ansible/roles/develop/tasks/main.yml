@@ -1,0 +1,27 @@
+---
+# Install openssh
+- ansible.builtin.include_role:
+  name: ansible-collections\ansible\roles\app-installs\windows-installs\ansible\roles\openssh
+
+- name: Run tasks of 'openssh'
+  ansible.builtin.import_role:
+    name: ansible-collections\ansible\roles\app-installs\windows-installs\ansible\roles\openssh
+    tasks_from: main.yml
+
+# Install Visual Studio
+- ansible.builtin.include_role:
+  name: ansible-collections\ansible\roles\app-installs\windows-installs\ansible\roles\visual_studio
+
+- name: Run tasks of 'visual-studio'
+  ansible.builtin.import_role:
+    name: ansible-collections\ansible\roles\app-installs\windows-installs\ansible\roles\visual_studio
+    tasks_from: main.yml
+
+# Install Java JDK
+- ansible.builtin.include_role:
+  name: ansible-collections\ansible\roles\app-installs\windows-installs\ansible\roles\java_jdk
+
+- name: Run tasks of 'java-jdk'
+  ansible.builtin.import_role:
+    name: ansible-collections\ansible\roles\app-installs\windows-installs\ansible\roles\java_jdk
+    tasks_from: main.yml

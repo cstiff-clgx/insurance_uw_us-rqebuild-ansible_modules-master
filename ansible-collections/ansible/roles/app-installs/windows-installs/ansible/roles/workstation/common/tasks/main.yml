@@ -1,0 +1,206 @@
+---
+- name: "Clear temp dir"
+  win_file:
+    state: absent
+    path: "{{ temp_dir }}"
+
+- name: "Create temp dir"
+  win_file:
+    state: directory
+    path: "{{ temp_dir }}"
+
+- name: "Set User Idle Time"
+  win_regedit:
+    path: '{{ item.path }}'
+    name: '{{ item.name }}'
+    data: '{{ item.value }}'
+    type: dword
+  with_items:
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', name: MaxIdleTime, value: 14400000}
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', name: MaxDisconnectionTime, value: 259200000}
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', name: RemoteAppLogoffTimeLimit, value: 0}
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', name: fResetBroken, value: 0}
+    - {path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System', name: InactivityTimeoutSecs, value: 21600}
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', name: NoAutoUpdate, value: 1}
+    - {path: 'HKLM:\Software\Microsoft\Windows\CurrentVersion\policies\system', name: EnableLUA, value: 0}
+
+- name: Updating PS security protocol
+  win_shell: |
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  become_method: runas
+
+- name: Disable UAC
+  win_shell: |
+    New-ItemProperty -Path HKLM:Software\Microsoft\Windows\CurrentVersion\policies\system -Name EnableLUA -PropertyType DWord -Value 0 -Force
+
+- name: Install 7zip and use a file version for the installation check
+  win_package:
+    path: "{{ zip_url }}"
+    creates_path: C:\Program Files\7-Zip\7z.exe
+    arguments: /S
+    product_id: 7-Zip
+    state: present
+  become_method: runas
+
+- name: Download NotePad++
+  win_get_url:
+    url: "{{ np_url }}"
+    dest: "{{ temp_dir }}\\{{ np_name }}"
+
+- name: "Install NotePad++"
+  win_shell: |
+    Start-Process -FilePath '{{ temp_dir }}\{{ np_name }}' -ArgumentList '/S' -Verb runas -Wait
+  become_method: runas
+
+- name: "Download VisualStudio Code"
+  win_shell: |
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64" -OutFile "{{ temp_dir }}\visualstudio.exe"
+  become_method: runas
+
+- name: "Install VisualStudio Code"
+  win_command: |
+    {{ temp_dir }}\\visualstudio.exe /VERYSILENT /NORESTART /MERGETASKS=!runcode,desktopicon,associatewithfiles
+  become_method: runas
+  ignore_errors: True
+
+- name: "Download Python"
+  win_shell: |
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri "https://www.python.org/ftp/python/{{ python_version }}/python-{{ python_version }}-amd64.exe" -OutFile "{{ temp_dir }}\python-{{ python_version }}.exe"
+  become_method: runas
+
+- name: Install Python
+  win_command: '{{ temp_dir }}\python-{{ python_version }}.exe /quiet TargetDir=C:\Python{{ python_version }}\ InstallAllUsers=1 PrependPath=1 Include_test=0'
+  become_method: runas
+
+# - name: "Download Source Gear Vault Client"
+#   win_get_url:
+#     url: "{{ vaultclient_url }}"
+#     dest: "{{ temp_dir }}\\{{ vaultclient_name }}"
+
+# - name: "Installation Source Gear Vault Client"
+#   win_shell: |
+#     Start-Process msiexec.exe -Wait -ArgumentList '/I {{ temp_dir }}\\{{ vaultclient_name }} /qb'
+#   become_method: runas
+
+- name: SSMS ==> Installed?
+  win_stat:
+    path: "c:\\Program Files (x86)\\Microsoft SQL Server Management Studio 18"
+  register: ssms_app
+
+- name: "Download SQL Server Management Studio"
+  win_shell: |
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri "https://aka.ms/ssmsfullsetup" -OutFile "{{ temp_dir }}\SSMS-Setup-ENU.exe"
+  become_method: runas
+  when: not ssms_app.stat.exists
+
+- name: "Install SQL Server Management Studio"
+  win_command: |
+    {{ temp_dir }}\\SSMS-Setup-ENU.exe /install /quiet /norestart
+  become_method: runas
+  when: not ssms_app.stat.exists
+
+#- name: "Installing Chocolatey"
+#  win_shell: |
+#    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+#  become_method: runas
+#
+#- name: "Ensure Windows Terminal installed"
+#  win_chocolatey:
+#    name: microsoft-windows-terminal
+#    state: present
+
+- name: "Download SoapUI"
+  win_get_url:
+    url: "{{ soapui_url }}"
+    dest: "{{ temp_dir }}\\{{ soapui_name }}"
+
+- name: "Install SoapUI"
+  win_command: |
+    {{ temp_dir }}\\{{ soapui_name }} -q
+  become_method: runas
+
+- name: "Download Putty"
+  win_get_url:
+    url: "{{ putty_url }}"
+    dest: "{{ temp_dir }}\\{{ putty_name }}"
+
+- name: "Installation Putty"
+  win_shell: |
+    Start-Process msiexec.exe -Wait -ArgumentList '/I {{ temp_dir }}\\{{ putty_name }} /qn'
+  become_method: runas
+
+- name: "Download Git"
+  win_get_url:
+    url: "{{ git_url }}"
+    dest: "{{ temp_dir }}\\{{ git_name }}"
+
+- name: "Install Git"
+  win_command: |
+    {{ temp_dir }}\\{{ git_name }} /VERYSILENT /NORESTART /COMPONENTS=icons,icons\desktop,ext,ext\shellhere,ext\guihere,gitlfs,assoc,assoc_sh
+  become_method: runas
+
+- name: "Download MobaXterm"
+  win_get_url:
+    url: "{{ xterm_package }}"
+    dest: "{{ temp_dir }}\\{{ xterm_name }}.zip"
+
+- name: "UnZip MobaXterm"
+  win_command: '"C:\\Program Files\\7-Zip\\7z.exe" x {{ temp_dir }}\{{ xterm_name }}.zip -o{{ temp_dir }}\ -y'
+
+- name: "Installation MobaXterm"
+  win_shell: |
+    Start-Process msiexec.exe -Wait -ArgumentList '/I {{ temp_dir }}\MobaXterm_installer_{{ xterm_version }}.msi /qb'
+  become_method: runas
+
+- name: "Download Terraform"
+  win_get_url:
+    url: "{{ terraform_url }}"
+    dest: "{{ temp_dir }}\\{{ terraform_name }}.zip"
+
+- name: "UnZip Terraform"
+  win_command: '"C:\\Program Files\\7-Zip\\7z.exe" x {{ temp_dir }}\{{ terraform_name }}.zip -oC:\Windows\ -y'
+
+- name: "Download Insomnia"
+  win_get_url:
+    url: "{{ insomnia_url }}"
+    dest: "{{ temp_dir }}\\{{ insomnia_name }}.exe"
+
+- name: "Install Insomnia"
+  win_command: '{{ temp_dir }}\{{ insomnia_name }}.exe -s'
+  become_method: runas
+
+- name: "Download WinMerge"
+  win_get_url:
+    url: "{{ winmerge_url }}"
+    dest: "{{ temp_dir }}\\{{ winmerge_name }}.exe"
+
+- name: "Install WinMerge"
+  win_command: '{{ temp_dir }}\{{ winmerge_name }}.exe /NORESTART /VERYSILENT'
+  become_method: runas
+
+- name: "Download GreenShot"
+  win_get_url:
+    url: "{{ greenshot_url }}"
+    dest: "{{ temp_dir }}\\{{ greenshot_name }}.exe"
+
+- name: "Install GreenShot"
+  win_command: '{{ temp_dir }}\{{ greenshot_name }}.exe /NORESTART /VERYSILENT'
+  become_method: runas
+
+- name: "Download GH Desktop"
+  win_get_url:
+    url: "{{ gh_desktop_url }}"
+    dest: "{{ temp_dir }}\\{{ gh_desktop_name }}.exe"
+
+- name: "Install GH Desktop"
+  win_command: |
+    {{ temp_dir }}\\{{ gh_desktop_name }}.exe --silent
+  become_method: runas
+
+- name: Reboot a machine that takes time to settle after being booted
+  win_reboot:
+    post_reboot_delay: 120
+

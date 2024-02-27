@@ -1,0 +1,32 @@
+- name: Install Boost
+  shell:
+    cmd: |
+      BOOST_VERSION="1.72.0"
+      boost_ver_nodots=$(echo "$BOOST_VERSION" | sed -r 's/\./_/g')
+      BOOST_SOURCE="http://sourceforge.net/projects/boost/files/boost/$BOOST_VERSION/boost_$boost_ver_nodots.tar.bz2/download"
+      boost_dir_name=boost_$boost_ver_nodots
+      echo "Downloading Boost-$BOOST_VERSION"
+      wget -c "$BOOST_SOURCE" -O "$boost_dir_name.tar.bz2"
+      tar -xf "$boost_dir_name.tar.bz2"
+      cd "$boost_dir_name" || exit 1
+      ./bootstrap.sh --prefix=/usr/local
+      BOOST_BUILD_MODULES=""
+      ./b2 "$BOOST_BUILD_MODULES" -j 6 install
+      sh -c 'echo "/usr/local/lib" >> /etc/ld.so.conf.d/local.conf'
+      ldconfig
+      cd ..
+      rm -f "$boost_dir_name.tar.bz2"
+      rm -rf "$boost_dir_name"
+    chdir: /tmp
+  register: ps
+
+- name: Error Lines Boost
+  debug: var=ps.stderr_lines
+
+- name: Set Config
+  shell:
+    cmd: |
+      sh -c "echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib' >> /etc/profile"
+      chmod -R a+rX /usr/
+      ldconfig
+    chdir: /tmp

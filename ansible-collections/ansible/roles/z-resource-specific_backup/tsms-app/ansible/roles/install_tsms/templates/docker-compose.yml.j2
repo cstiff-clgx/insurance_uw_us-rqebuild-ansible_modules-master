@@ -1,0 +1,21 @@
+version: '3'
+services:
+  server:
+   restart: always
+   image: us-docker.pkg.dev/clgx-artregistry-mgt-prd-3b27/insurance-uw-us-rqebuild-docker-local/tsms_server:latest
+   ports:
+     - 8080:8080
+   environment:
+     - TsmsDbServer={{ db_fqdn }}
+     - TsmsDbPort=1433
+     - TsmsDbUid="sa"
+     - TsmsDbPwd="sa_pa$$w0rd"
+     - RqeDbUid="wce"
+     - RqeDbPwd="wcepwd"
+     - RootPath="22.1"
+     - FileSystem="gcp"
+  client:
+    restart: always
+    image: us-docker.pkg.dev/clgx-artregistry-mgt-prd-3b27/insurance-uw-us-rqebuild-docker-local/tsms_client:latest
+    ports:
+     - 80:80

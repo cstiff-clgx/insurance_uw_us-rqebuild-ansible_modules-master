@@ -1,0 +1,4 @@
+---
+roles:
+  - src: "git@github.com:corelogic-private/insurance_uw_us-rqebuild-iac.git"
+    version: ansible-modules

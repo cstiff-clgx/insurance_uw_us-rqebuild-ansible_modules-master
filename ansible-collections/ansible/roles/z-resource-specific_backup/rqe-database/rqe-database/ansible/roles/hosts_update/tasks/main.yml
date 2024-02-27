@@ -1,0 +1,37 @@
+- name: Determine target host info
+  set_fact:
+    app_server: "{{ inventory_hostname | replace('-db','-app') }}"
+
+- name: Determine app server FQDN
+  set_fact:
+    app_fqdn: "{{ app_server }}.{{ zone }}.c.{{ application_project }}.internal"
+
+- name: Determined host entry
+  debug:
+    msg: "{{ app_server }}  ==>  {{ app_fqdn }}"
+
+- name: Run deploy script from PD
+  win_shell: |
+    Import-Module Carbon
+    $ipaddr = ""
+    $host_fqdn = "{{ app_fqdn }}"
+    try {
+      $ipaddr = [System.Net.Dns]::GetHostAddresses($host_fqdn).IPAddressToString
+    }
+    catch{
+    }
+
+    if (![string]::IsNullOrEmpty($ipaddr)) {
+      echo "Updating hosts entry for {{ app_server }} with $ipaddr"
+      Set-HostsEntry -IPAddress $ipaddr -HostName {{ app_server }} -Description "APP Server"
+    }
+    else {
+      echo "NOT Updating hosts entry for {{ app_server }}"
+    }
+    
+  register: dns_result
+
+- name: Hosts update output
+  debug:
+    msg: "{{ dns_result.stdout | replace('\n\r','') }}"
+

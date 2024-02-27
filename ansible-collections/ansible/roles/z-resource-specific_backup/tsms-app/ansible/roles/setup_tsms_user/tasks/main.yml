@@ -1,0 +1,12 @@
+- name: Create user accounts and add users to groups
+  ansible.builtin.user:
+    name: tsms
+    shell: /bin/bash
+    groups: "admin,adm,sudo,google-sudoers,docker"
+
+- name: Add authorized keys
+  ansible.builtin.authorized_key:
+    user: tsms
+    key: "{{ lookup('file', 'tsms.pub') }}"
+
+

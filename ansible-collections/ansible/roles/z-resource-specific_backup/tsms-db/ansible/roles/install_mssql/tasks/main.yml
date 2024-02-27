@@ -1,0 +1,166 @@
+- name: Check if MS SQL Server service is started
+  shell: sudo systemctl status mssql-server | grep Active | awk -v N=2 '{print $N}'
+  register: output
+
+- name: Stop MS SQL Server service if started
+  service:
+    name: mssql-server
+    state: stopped
+  when: output.stdout == 'active'
+
+- name: Add MS GPG apt Key
+  apt_key:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    state: present
+
+- name: add MSSQL repo
+  apt_repository:
+    repo: deb https://packages.microsoft.com/ubuntu/22.04/mssql-server-2022 jammy main
+    state: present
+    update_cache: true
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+- name: add MSSQL Tools repo
+  apt_repository:
+    repo: deb https://packages.microsoft.com/ubuntu/22.04/prod jammy main
+    state: present
+    update_cache: true
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+- name: Install required packages
+  apt:
+    name:
+      - mssql-server
+      - unixodbc-dev
+      - mc
+
+- name: Install required packages
+  apt:
+    name:
+      - mssql-tools18
+  environment:
+    ACCEPT_EULA: 'y'
+
+- name: Create tsms data disk mount point
+  file:
+    path: "{{ tsmsdb_data_drive_path }}"
+    mode: 0777
+    state: directory
+    group: mssql
+
+- name: Setup mssql
+  shell: |
+    service mssql-server stop
+    export MSSQL_PID=Developer 
+    export ACCEPT_EULA=Y
+    export MSSQL_SA_PASSWORD='{{mssql_password}}'
+    /opt/mssql/bin/mssql-conf -n setup
+    /opt/mssql/bin/mssql-conf set filelocation.defaultdatadir /tsmsdb
+    /opt/mssql/bin/mssql-conf set filelocation.defaultlogdir /tsmsdb
+    /opt/mssql/bin/mssql-conf set network.forceencryption 0
+    service mssql-server start
+  args:
+    executable: /bin/bash
+  register: output
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+- name: Setup env
+  shell: |
+    IS_IT_THERE=$(cat /etc/profile | grep -E "opt/mssql-tools18")
+    if [[ -z $IS_IT_THERE ]]; then
+        echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> /etc/profile
+    fi
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+- name: Copy setup script to temp dir
+  copy:
+    src: setup.sql
+    dest: /tmp/setup.sql
+
+- name: Execute setup script
+  shell: |
+    /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P '{{mssql_password}}' -C -i /tmp/setup.sql
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+# RQE
+- name: Download RQE Default Database backup from GCP Bucket
+  shell: |
+    gsutil cp "{{ rqe_backup }}" /tsmsdb/RQE.bak
+    chmod a+r /tsmsdb/RQE.bak
+    gsutil cp "{{ oasis_backup }}" /tsmsdb/Oasis.bak
+    chmod a+r /tsmsdb/Oasis.bak
+    gsutil cp "{{ pds_backup }}" /tsmsdb/PDS.bak
+    chmod a+r /tsmsdb/PDS.bak
+    
+- name: Restore RQE Default Database backup from local
+  set_fact:
+    target_database: "RQE"
+    target_version: "{{ rqe_version }}"
+
+- name: Copy setup script to temp dir
+  template:
+    src: restore.sql.j2
+    dest: /tmp/restore.sql
+    owner: mssql
+
+- name: Execute restore script
+  shell: |
+    /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P '{{mssql_password}}' -C -i /tmp/restore.sql
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+#PDS
+- name: Restore PDS Default Database backup from local
+  set_fact:
+    target_database: "PDS"
+    target_version: ""
+
+- name: Copy setup script to temp dir
+  template:
+    src: restore.sql.j2
+    dest: /tmp/restore.sql
+    owner: mssql
+
+- name: Execute restore script
+  shell: |
+    /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P '{{mssql_password}}' -C -i /tmp/restore.sql
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+#Oasis   
+- name: Restore Oasis Default Database backup from local
+  set_fact:
+    target_database: "Oasis"
+    target_version: ""
+
+- name: Copy setup script to temp dir
+  template:
+    src: restore.sql.j2
+    dest: /tmp/restore.sql
+    owner: mssql
+
+- name: Execute restore script
+  shell: |
+    /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P '{{mssql_password}}' -C -i /tmp/restore.sql
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"

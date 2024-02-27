@@ -1,0 +1,22 @@
+- name: Configure rqe database host
+  hosts: "{{ lookup('env', 'PREFIX') }}-*"
+  vars:
+    snapshot_version: "{{ lookup('env', 'APP_VERSION') }}"
+    prefix: "{{ lookup('env', 'PREFIX') }}"
+    depl_env: "{{ lookup('env', 'ENV') }}"
+    zone: "{{ lookup('env', 'APP_ZONE') }}"
+    application_project: "{{ lookup('env', 'APP_PROJECT') }}"
+    disk_extension: "{{ lookup('env', 'DATA_DISK_EXTENSION') }}"
+
+  roles:
+    - {role: windisk_partition, tags: [database, partition], when: snapshot_version  == 'na'}
+    - {role: windisk_extend_c}
+    - {role: create_users}
+    - {role: install_ps_modules}
+    - {role: hosts_update}
+    - {role: prepare_database, tags: [database, setup]}
+    - {role: database_setup, tags: [database, setup], when: snapshot_version != 'na'}
+    - {role: openssh}
+    - {role: windisk_extend, tags: data_disk_extension, when: (disk_extension|bool == true) or (snapshot_version != 'na')}
+
+

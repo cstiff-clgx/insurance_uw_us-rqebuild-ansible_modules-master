@@ -1,0 +1,48 @@
+---
+zip_url: 'https://www.7-zip.org/a/7z2107-x64.exe'
+
+np_version: "8.6.2"
+np_name: "npp.{{ np_version }}.exe"
+np_url: "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v{{ np_version }}/npp.{{ np_version }}.Installer.exe"
+
+tp_version: "764"
+tp_name: "tp.{{ tp_version }}.zip"
+tp_url: "https://www.textpad.com/file?path=v76/x64/txpeng764-64.zip"
+
+python_version: 3.11.2
+
+vaultclient_name: "vaultclient.msi"
+vaultclient_url: "https://download.sourcegear.com/VaultPro/10.1.0.31128/VaultProClient_10_1_0_31128.msi"
+
+soapui_version: "5.6.0"
+soapui_name: "SoapUI-{{ soapui_version }}.exe"
+soapui_url: "https://s3.amazonaws.com/downloads.eviware/soapuios/{{ soapui_version }}/SoapUI-x64-{{ soapui_version }}.exe"
+
+putty_version: "0.76"
+putty_name: "putty-{{ putty_version }}.msi"
+putty_url: "https://the.earth.li/~sgtatham/putty/{{ putty_version }}/w64/putty-64bit-{{ putty_version }}-installer.msi"
+
+git_version: "2.39.2"
+git_name: "git-{{ git_version }}.exe"
+git_url: "https://github.com/git-for-windows/git/releases/download/v{{ git_version }}.windows.1/Git-{{ git_version }}-64-bit.exe"
+
+xterm_version: "21.5"
+xterm_name: "MobaXterm"
+xterm_package: "https://download.mobatek.net/2152021112100754/MobaXterm_Installer_v{{ xterm_version }}.zip"
+
+terraform_version: "1.1.0"
+terraform_name: "terraform"
+terraform_url: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_windows_amd64.zip"
+
+insomnia_version: "2021.7.1"
+insomnia_name: "insomnia"
+insomnia_url: "https://github.com/Kong/insomnia/releases/download/core%40{{ insomnia_version }}/Insomnia.Core-{{ insomnia_version }}.exe"
+
+winmerge_name: "winmerge"
+winmerge_url: "https://github.com/WinMerge/winmerge/releases/download/v2.16.18/WinMerge-2.16.18-x64-Setup.exe"
+
+greenshot_name: "greenshot"
+greenshot_url: "https://github.com/greenshot/greenshot/releases/download/Greenshot-RELEASE-1.2.10.6/Greenshot-INSTALLER-1.2.10.6-RELEASE.exe"
+
+gh_desktop_name: "gh_desktop"
+gh_desktop_url: "https://central.github.com/deployments/desktop/desktop/latest/win32"

@@ -1,0 +1,11 @@
+- name: Configure rqe application host
+  hosts: "{{ lookup('env', 'HOST') }}-linux"
+  become: true
+
+  roles:
+    - { role: fix_access }
+    - { role: system_setup }
+    - { role: install_software }
+    # - { role: compile_libraries }
+    # - { role: compile_boost }
+    - { role: set_ld_lib_path }

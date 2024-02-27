@@ -1,0 +1,4 @@
+rqe_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['rqe_user_pass']}}"
+rqe_svc_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['rqe_svc_user_pass']}}"
+wce_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['wce_db_pass']}}"
+temp_dir: 'c:\Temp'

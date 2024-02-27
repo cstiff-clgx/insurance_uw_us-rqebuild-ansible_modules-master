@@ -1,0 +1,136 @@
+- name: Clone gRPC
+  git:
+    repo: 'https://github.com/grpc/grpc'
+    dest: /tmp/grpc
+    version: v1.28.1
+
+- name: Install Protobuf
+  shell:
+    cmd: |
+      ./autogen.sh
+      ./configure --prefix=/usr
+      make -j6 check
+      make -j6
+      make install
+      ldconfig
+    chdir: /tmp/grpc/third_party/protobuf
+  register: ps
+
+- name: Error Lines Protobuf
+  debug: var=ps.stderr_lines
+
+- name: Output Lines Protobuf
+  debug: var=ps.stdout_lines
+
+- name: Install gRPC
+  shell:
+    cmd: |
+      mkdir -p cmake/build
+      cd cmake/build
+      cmake -DgRPC_INSTALL=ON \
+          -DgRPC_BUILD_TESTS=OFF \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr \
+          -DCMAKE_CXX_STANDARD=14 \
+          ../..
+      make -j6
+      make install
+      ldconfig
+    chdir: /tmp/grpc
+  register: ps
+
+- name: Error Lines gRPC
+  debug: var=ps.stderr_lines
+
+- name: Output Lines gRPC
+  debug: var=ps.stdout_lines
+
+- name: Removing /tmp/grpc
+  file:
+    path: /tmp/grpc
+    state: absent
+
+- name: Install Proj
+  shell:
+    cmd: |
+      PROJ_VERSION="8.1.1"
+      wget -c https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz -O proj-${PROJ_VERSION}.tar.gz
+      tar xzvf proj-${PROJ_VERSION}.tar.gz
+      cd proj-${PROJ_VERSION} || exit 1
+      mkdir -p build && cd build
+      cmake -GNinja -DBUILD_TESTING=OFF ..
+      cmake --build .
+      cmake --build . --target install
+      projsync --system-directory --all
+      chmod -R a+rX /usr/local/share/proj
+      rm -rf /tmp/proj-${PROJ_VERSION}
+      rm -f /tmp/proj-${PROJ_VERSION}.tar.gz
+    chdir: /tmp
+  register: ps
+
+- name: Output Lines
+  debug: var=ps.stdout_lines
+
+- name: Error Lines
+  debug: var=ps.stderr_lines
+
+- name: Install GDAL
+  shell:
+    cmd: |
+      GDAL_VERSION="3.3.2"
+      wget -c http://download.osgeo.org/gdal/${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz -O gdal-${GDAL_VERSION}.tar.gz
+      tar xzvf gdal-${GDAL_VERSION}.tar.gz
+      cd gdal-$GDAL_VERSION || exit 1
+      ./configure --includedir=/usr/local/include/gdal --with-python=no --with-cpp14=yes --with-spatialite=yes
+      make clean
+      make -j 6
+      make install
+      cp data/* /usr/local/share/gdal
+      chmod -R a+rX /usr/local/share/gdal
+      cd ..
+      rm -f gdal-${GDAL_VERSION}.tar.gz
+      rm -rf gdal-$GDAL_VERSION
+    chdir: /tmp
+  register: ps
+
+# - name: Install GDAL
+#   shell:
+#     cmd: |
+#       GDAL_VERSION="2.4.4"
+#       wget -c http://download.osgeo.org/gdal/${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz -O gdal-${GDAL_VERSION}.tar.gz
+#       tar xzvf gdal-${GDAL_VERSION}.tar.gz
+#       cd gdal-$GDAL_VERSION || exit 1
+#       ./configure --includedir=/usr/local/include/gdal --with-python=no --without-bsb --with-oci=no --with-teigha=no --with-lerc=no
+#       make clean
+#       make -j 6
+#       make install
+#       cd ..
+#       rm -f gdal-${GDAL_VERSION}.tar.gz
+#       rm -rf gdal-$GDAL_VERSION
+#     chdir: /tmp
+#     register: ps
+
+# - name: Output Lines
+#   debug: var=ps.stdout_lines
+
+- name: Error Lines
+  debug: var=ps.stderr_lines
+
+- name: Install Catch2
+  shell:
+    cmd: |
+      git clone https://github.com/catchorg/Catch2.git
+      cd Catch2
+      cmake -Bbuild -H. -DBUILD_TESTING=OFF
+      cmake --build build/ --target install
+      cd ..
+      rm -rf Catch2
+    chdir: /tmp
+
+- name: Set Config
+  shell:
+    cmd: |
+      sh -c "echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib' >> /etc/profile"
+      chmod -R a+rX /usr/
+      ldconfig
+    chdir: /tmp

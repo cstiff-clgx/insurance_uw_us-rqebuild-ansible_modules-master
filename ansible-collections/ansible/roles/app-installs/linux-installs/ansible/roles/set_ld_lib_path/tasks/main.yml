@@ -1,0 +1,7 @@
+- name: Set Config
+  shell:
+    cmd: |
+      sh -c "echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib' >> /etc/profile"
+      chmod -R a+rX /usr/
+      ldconfig
+    chdir: /tmp

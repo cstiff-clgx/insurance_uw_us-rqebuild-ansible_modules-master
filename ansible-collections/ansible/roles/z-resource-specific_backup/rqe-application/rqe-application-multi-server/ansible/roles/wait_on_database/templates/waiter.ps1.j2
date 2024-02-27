@@ -1,0 +1,30 @@
+# Download the DSC Module
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+Register-PSRepository -Default -Verbose
+Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+Install-Module -Name dbatools -Force
+Set-DbatoolsConfig -Name Import.EncryptionMessageCheck -Value $false -PassThru | Register-DbatoolsConfig
+Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -PassThru | Register-DbatoolsConfig 
+
+
+$SnapshotVersion = "{{ snapshot_version }}"
+$RQEVersion = [int]$SnapshotVersion.Split("-")[0]
+
+for (($i = 0); $i -lt 15; $i++) {
+    try {
+        if ($RQEVersion -ge 23) {
+            Write-Host "Attempting to connect to DB ($i)"
+            $AppServerName = (Get-CimInstance -ClassName Win32_ComputerSystem).Name
+            $DbServerName = $AppServerName.replace("-APP", "-DB")
+            $saPassword = ConvertTo-SecureString -AsPlainText -Force -String "{{ rqe_svc_password }}"
+            $saCred = New-Object System.Management.Automation.PSCredential ("sa", $saPassword)
+            Test-DbaConnection $DbServerName -SkipPSRemoting -SqlCredential $saCred
+        }
+        break
+    }
+    catch {
+        Write-Host "Failed ($i)"
+    }
+    Start-Sleep -Seconds 120
+}

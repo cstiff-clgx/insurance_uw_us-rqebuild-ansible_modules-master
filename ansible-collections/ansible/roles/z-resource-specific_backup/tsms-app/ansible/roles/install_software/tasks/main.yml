@@ -1,0 +1,13 @@
+- name: Install required packages
+  apt:
+    name:
+      - docker.io
+      - htop
+      - iotop
+    state: present
+    update_cache: yes
+
+- name: Remove dependencies that are no longer required
+  apt:
+    autoremove: yes
+

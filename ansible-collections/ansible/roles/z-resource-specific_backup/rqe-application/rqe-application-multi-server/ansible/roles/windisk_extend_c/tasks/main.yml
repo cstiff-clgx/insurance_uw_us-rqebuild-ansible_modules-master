@@ -1,0 +1,3 @@
+- name: Exteted partition to all allocated space
+  win_shell: "$Size = Get-PartitionSupportedSize -DriveLetter C; if ([math]::floor($Size.SizeMax /1Gb) -gt [math]::floor((Get-Volume -DriveLetter C).Size /1Gb)) {Resize-Partition -DriveLetter C -Size $Size.SizeMax}"
+  become_method: runas

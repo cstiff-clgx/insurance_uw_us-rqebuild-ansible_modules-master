@@ -1,0 +1,27 @@
+- name: Install needed PS Modules
+  win_shell: |
+    # Download the DSC Module
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+    Register-PSRepository -Default -Verbose
+    Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+
+    Install-Module -Name Carbon -Force
+    Install-Module -Name dbatools -Force
+
+    Write-Host "Installed all .ps modules."
+
+  register: result_ps_modules
+  become: yes
+  become_user: rqe
+  become_method: runas
+  become_flags: logon_type=interactive logon_flags=with_profile
+
+- name: Print prep installation script output
+  debug: 
+    msg: "{{ result_ps_modules.stdout.split('\r') }}"
+
+- name: Print prep installation script ERRORS output
+  debug: 
+    msg: "{{ result_ps_modules.stderr.split('\r') }}"
+

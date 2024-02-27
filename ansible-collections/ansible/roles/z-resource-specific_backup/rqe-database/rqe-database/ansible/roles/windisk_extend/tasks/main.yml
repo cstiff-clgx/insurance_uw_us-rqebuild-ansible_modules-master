@@ -1,0 +1,15 @@
+- name: Initialize Disk
+  win_shell: "Get-Disk | Where-Object PartitionStyle -Eq 'RAW' | Initialize-Disk"
+  become_method: runas
+
+- name: Update disk size 
+  win_shell: "Update-Disk -Number 1"
+  become_method: runas
+
+- name: Check D drive allocation and partition it
+  win_shell: "if ((Get-Volume).DriveLetter -notcontains 'D') {New-Partition -DiskNumber 1 -DriveLetter D -UseMaximumSize}"
+  become_method: runas
+
+- name: Exteted partition to all allocated space
+  win_shell: "$Size = Get-PartitionSupportedSize -DriveLetter D; if ([math]::floor($Size.SizeMax /1Gb) -gt [math]::floor((Get-Volume -DriveLetter D).Size /1Gb)) {Resize-Partition -DriveLetter D -Size $Size.SizeMax}"
+  become_method: runas

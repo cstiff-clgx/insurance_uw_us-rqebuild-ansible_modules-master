@@ -1,0 +1,36 @@
+- name: Determine target host info
+  set_fact:
+    db_server: "{{ inventory_hostname | replace('-app', '-db') }}"
+
+- name: Determine db server FQDN
+  set_fact:
+    db_fqdn: "{{ db_server }}.{{ zone }}.c.{{ application_project }}.internal"
+
+- name: Copy template docker-compose preparation script to deploy dir
+  template:
+    owner: tsms
+    group: tsms
+    mode: u+rw,g+r,o+r
+    src: docker-compose.yml.j2
+    dest: /home/tsms/docker-compose.yml
+
+- name: Install and setup docker-credential-gcr tool
+  shell: |
+    cd /usr/local/bin/
+    curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v2.1.18/docker-credential-gcr_linux_amd64-2.1.18.tar.gz" | tar xz docker-credential-gcr
+    docker-credential-gcr configure-docker
+    gcloud auth configure-docker us-docker.pkg.dev
+
+- name: Start Docker Compose
+  become: true
+  become_user: tsms
+  shell: |
+    gcloud auth configure-docker us-docker.pkg.dev
+    cd ~ && docker-compose up -d
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}\n\n\n\n{{ output.stderr }}"
+
+

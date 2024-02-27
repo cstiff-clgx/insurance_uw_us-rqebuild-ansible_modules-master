@@ -1,0 +1,14 @@
+- name: Configure tsms-app
+  hosts: "tsms-{{ lookup('env', 'PREFIX') }}-app"  
+  become: true
+
+  vars:
+    prefix: "{{ lookup('env', 'PREFIX') }}"
+    depl_env: "{{ lookup('env', 'ENV') }}"
+    zone: "{{ lookup('env', 'APP_ZONE') }}"
+    application_project: "{{ lookup('env', 'APP_PROJECT') }}"
+
+  roles:
+    - install_software
+    - setup_tsms_user
+    - install_tsms

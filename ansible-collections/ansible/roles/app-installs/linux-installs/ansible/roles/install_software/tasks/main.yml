@@ -1,0 +1,138 @@
+- name: Install required packages
+  apt:
+    name:
+      - docker.io
+      - g++
+      - gcc
+      - gfortran
+      - git
+      - htop
+      - iotop
+      - make
+      - mc
+      - gdb
+      - gdbserver
+      - build-essential
+      - autotools-dev
+      - libicu-dev
+      - libbz2-dev
+      - ninja-build
+      - gperf
+      - libhiredis-dev
+      - libreadline-dev
+      - wget
+      - curl
+      - libncurses5-dev
+      - libncursesw5-dev
+      - xz-utils
+      - tk-dev
+      - libffi-dev
+      - liblzma-dev
+      - python3-openssl
+      - sqlite3
+      - unixodbc
+      - unixodbc-dev
+      - libspatialindex-dev
+      - graphviz
+      - libpng-dev
+      - libxml2-dev
+      - direnv
+      - libcairo2-dev
+      - libcairomm-1.0-dev
+      - autoconf
+      - libtool
+      - pkg-config
+      - libevent-dev
+      - libuuid1
+      - libmemcached-dev
+      - uuid-dev
+      - libssl-dev
+      - valgrind
+      # LLVM (we probably don't need this)
+      - clang-format
+      - clang-tidy
+      - clang-tools
+      - clang
+      - clangd
+      - lld
+      - lldb
+      # End LLVM
+      - curl
+      - zip
+      - unzip
+      - tar
+      - jq
+      - doxygen
+      - fzf
+      - yadm
+      - direnv
+      - pipx
+    state: present
+    update_cache: yes
+
+- name: Remove dependencies that are no longer required
+  apt:
+    autoremove: yes
+
+- name: Install Go
+  get_url:
+    url: https://golang.org/dl/go1.20.2.linux-amd64.tar.gz
+    dest: /tmp/go.tar.gz
+
+- name: Unarchive Go
+  unarchive:
+    src: /tmp/go.tar.gz
+    dest: /usr/local
+    remote_src: yes
+    creates: /usr/local/go/bin/go
+
+- name: Add another bin dir to system-wide $PATH.
+  copy:
+    dest: /etc/profile.d/golang-path.sh
+    content: "PATH=$PATH:/usr/local/go/bin"
+    mode: u+rwx,g+rx,o+rwx
+
+- name: Install CMake
+  shell:
+    cmd: |
+      CMAKE_VERSION=3.24.2
+      wget -c https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-Linux-x86_64.sh -O cmake-$CMAKE_VERSION-Linux-x86_64.sh
+      chmod +x cmake-$CMAKE_VERSION-Linux-x86_64.sh
+      sudo ./cmake-$CMAKE_VERSION-Linux-x86_64.sh --skip-license --prefix=/usr/local
+      rm -f cmake-$CMAKE_VERSION-Linux-x86_64.sh
+    chdir: /tmp
+    creates: /usr/local/bin/cmake
+
+- name: Add cran-r GPG apt Key
+  apt_key:
+    url: https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc
+    state: present
+
+- name: add cran-r repo
+  apt_repository:
+    repo: deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/
+    state: present
+    update_cache: true
+
+- name: fix perm
+  shell:
+    cmd: |
+      chmod a+r /etc/apt/sources.list.d/cloud_r_project_org*
+  ignore_errors: true
+
+- name: Install required packages
+  apt:
+    name:
+      - r-base
+    state: present
+    update_cache: true
+
+- name: Install docker-compose from official github repo
+  get_url:
+    url : https://github.com/docker/compose/releases/download/v2.17.0/docker-compose-linux-x86_64
+    dest: /usr/bin/docker-compose
+    mode: 'u+x,g+x'
+
+- name: Reboot a machine that takes time to settle after being booted
+  reboot:
+    post_reboot_delay: 90

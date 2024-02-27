@@ -1,0 +1,4 @@
+tsmsdb_data_drive_lv_name: tsmsdb_data_lv
+tsmsdb_data_drive_vg_name: tsmsdb_data_vg
+tsmsdb_data_drive_devices:
+    - "/dev/disk/by-id/google-persistent-disk-1"

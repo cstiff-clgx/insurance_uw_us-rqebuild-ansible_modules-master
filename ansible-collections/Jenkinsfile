@@ -1,0 +1,11 @@
+#!groovy
+
+@Library('CoreLogicDevopsUtils')
+@Library('clgx-pipeline-iac')
+
+def config = [
+        'app_name'     : 'ansible-modules',
+        'config_repo'  : 'insurance_uw_us-rqebuild-pipeline-iac'
+    ]
+
+iacMain(this, config)

@@ -1,0 +1,14 @@
+- name: Fix sshd_config
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regex: ^(# *)?AllowTcpForwarding
+    line: AllowTcpForwarding yes
+
+- name: Restart ssh
+  shell: sleep 3; systemctl restart sshd
+  async: 1
+  poll: 0
+
+# - name: Reboot a machine that takes time to settle after being booted
+#   reboot:
+#     post_reboot_delay: 90

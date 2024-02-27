@@ -1,0 +1,30 @@
+#!groovy
+
+@Library('CoreLogicDevopsUtils')
+@Library('clgx-pipeline-iac')
+
+def config = [
+    'app_name'    : 'workstation-testing',
+    'config_repo' : 'insurance_uw_us-rqebuild-pipeline-iac',
+]
+
+iacMain(this, config)
+
+def preTasks(script, Map config, Map params) {
+
+        echo "Adjusting state file backed for specific host ${params.HOST}"
+        sh(script:"""#!/bin/bash -xl
+                                \$(sed -ie '0,/terraform/ s/terraform/${params.HOST}/' ./workstation-testing/terraform/env/${params.ENV}/backend.cfg ) """)
+        targetParam = "-var-file=./env/${params.ENV}/${params.HOST}.tfvars"
+        config.terraform_extra_args = targetParam + ' ' + config.terraform_extra_args
+        config.ansible_extra_args += " --limit ${params.HOST}"
+
+        sh(script:"""cd ${config.app_name}/terraform || exit 1
+        ${config.terraform} init -reconfigure -var-file=./env/${params.ENV}/terraform.tfvars -backend-config=./env/${params.ENV}/backend.cfg 2>&1 || true
+        ${config.terraform} state replace-provider -auto-approve 'registry.terraform.io/-/google' 'hashicorp/google'
+        ${config.terraform} state replace-provider -auto-approve 'registry.terraform.io/-/google-beta' 'hashicorp/google-beta'
+        ${config.terraform} state replace-provider -auto-approve 'registry.terraform.io/-/null' 'hashicorp/null'
+        ${config.terraform} state replace-provider -auto-approve 'registry.terraform.io/-/random' 'hashicorp/random'
+        ${config.terraform} state replace-provider -auto-approve 'registry.terraform.io/-/vault' 'hashicorp/vault'
+    """)
+}

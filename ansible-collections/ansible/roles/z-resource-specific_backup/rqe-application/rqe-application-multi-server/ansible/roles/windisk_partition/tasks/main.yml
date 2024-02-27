@@ -1,0 +1,12 @@
+- name: Initialize Disk
+  win_shell: "Get-Disk | Where-Object PartitionStyle -Eq 'RAW' | Initialize-Disk"
+  become_method: runas
+  ignore_errors: yes
+
+- name: Partition attached data disk
+  win_shell: "New-Partition -DiskNumber 1 -DriveLetter D -UseMaximumSize"
+  become_method: runas
+
+- name: Full format created partition
+  win_shell: "Format-Volume -DriveLetter D -FileSystem NTFS"
+  become_method: runas

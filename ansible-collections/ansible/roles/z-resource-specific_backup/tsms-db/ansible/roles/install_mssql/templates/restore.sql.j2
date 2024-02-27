@@ -1,0 +1,28 @@
+RESTORE DATABASE [{{ target_database }}_{{ target_version }}]
+    FROM DISK = '/tsmsdb/{{ target_database }}.bak'
+    WITH MOVE 'ECTestNamager' TO '/tsmsdb/{{ target_database }}_{{ target_version }}.mdf',
+    MOVE 'ECTestNamager_log' TO '/tsmsdb/{{ target_database }}_{{ target_version }}_log.ldf'
+
+USE master;
+GO
+
+IF NOT EXISTS 
+    (SELECT name  
+     FROM master.sys.server_principals
+     WHERE name = 'EC_User')
+BEGIN
+    CREATE LOGIN EC_User WITH PASSWORD = 'Test1234';
+END
+GO
+
+USE [{{ target_database }}_{{ target_version }}];
+GO
+EXEC  sp_change_users_login @Action='update_one', @UserNamePattern='EC_User', @LoginName='EC_User';
+EXEC sp_addrolemember 'db_owner', 'EC_User';
+GO
+
+USE ECRelease;
+GO
+
+INSERT INTO EC_Release (Release_Name, Release_Database, Tolerance, Created_User, Created_DateTime, Deleted)
+VALUES ('{{ target_database }}_{{ target_version }}', '{{ target_database }}_{{ target_version }}', 0.01, 'cdaumlobko', CURRENT_TIMESTAMP, 0)

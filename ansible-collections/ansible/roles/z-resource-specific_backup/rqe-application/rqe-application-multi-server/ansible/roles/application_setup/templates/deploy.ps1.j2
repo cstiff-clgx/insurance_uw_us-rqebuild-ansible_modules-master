@@ -1,0 +1,281 @@
+[string]$scriptpath = $MyInvocation.MyCommand.Path
+[string]$scriptdir = Split-Path $Scriptpath
+
+Function Set-ServiceAcctCreds([string]$strServiceName, [string]$newAcct, [string]$newPass) {
+    $filter = 'Name=' + "'" + $strServiceName + "'" + ''
+    $service = Get-WMIObject -namespace "root\cimv2" -class Win32_Service -Filter $filter
+    if ($null -ne $Service) {
+        $service.Change($null, $null, $null, $null, $null, $null, $newAcct, $newPass)
+    }
+}
+
+
+function Get-IniContent ($filePath)
+{
+    $ini = @{}
+    switch -regex -file $FilePath
+    {
+        "^\[(.+)\]" # Section
+        {
+            $section = $matches[1]
+            $ini[$section] = @{}
+            $CommentCount = 0
+        }
+        "^(;.*)$" # Comment
+        {
+            $value = $matches[1]
+            $CommentCount = $CommentCount + 1
+            $name = “Comment” + $CommentCount
+            $ini[$section][$name] = $value
+        }
+        "(.+?)\s*=(.*)" # Key
+        {
+            $name,$value = $matches[1..2]
+            $ini[$section][$name] = $value
+        }
+    }
+    return $ini
+}
+
+# Download the DSC Module
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+Register-PSRepository -Default -Verbose
+Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+
+Install-Module -Name Carbon
+Import-Module Carbon
+
+$DeployDir = $scriptdir
+Set-Location -Path $DeployDir
+
+$SSMS_Path = "$DeployDir\SSMS-Setup-ENU.exe"
+$Source_Bucket = 'gs://clgx-rqebuild-app-dev-software'
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/APP/vcredist_x64_12.exe" $DeployDir
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/APP/vc_redist.x64_2019.exe" $DeployDir
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/APP/vc_redist.x64_2017.exe" $DeployDir
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/APP/openJDK*.exe" $DeployDir
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/APP/EQECAT32.INI" $DeployDir
+gsutil cp "$Source_Bucket/MSSQL/SQL_2017/sqlncli.msi" $DeployDir
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/APP/msodbcsql.msi" $DeployDir
+gsutil -m cp "$Source_Bucket/MSSQL/SSMS-Setup-ENU.exe" $DeployDir
+gsutil -m cp "$Source_Bucket/MSSQL/MsSqlCmdLnUtils.msi" $DeployDir
+
+Start-Process -FilePath "msiexec" -ArgumentList "/i $DeployDir\sqlncli.msi /qn IACCEPTSQLNCLILICENSETERMS=YES" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+
+# Install 2012
+$target = "$DeployDir\vcredist_x64_12.exe"
+Write-Host "Installing $target"
+Start-Process -FilePath "$target" -ArgumentList "/install /q /norestart" -Verb RunAs -Wait -ErrorAction Stop
+Write-Host "Done installing $target"
+
+# Install 2017
+$target = "$DeployDir\vc_redist.x64_2017.exe"
+Write-Host "Installing $target"
+Start-Process -FilePath "$target" -ArgumentList "/install /q /norestart" -Verb RunAs -Wait -ErrorAction Stop
+Write-Host "Done installing $target"
+
+# Install 2019
+$target = "$DeployDir\vc_redist.x64_2019.exe"
+Write-Host "Installing $target"
+Start-Process -FilePath "$target" -ArgumentList "/install /q /norestart" -Verb RunAs -Wait -ErrorAction Stop
+Write-Host "Done installing $target"
+
+# Install ODBC
+$target = "$DeployDir\msodbcsql.msi"
+Write-Host "Installing $target"
+Start-Process -FilePath "msiexec" -ArgumentList "/i $DeployDir\msodbcsql.msi /qn IACCEPTMSODBCSQLLICENSETERMS=YES" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+Write-Host "Done installing $target"
+
+# Copy EQECAT32.ini
+Copy-Item "$DeployDir\EQECAT32.INI" C:\Windows -Force
+
+# Install OpenJDK
+$OpenJDKFilePath = (Get-ChildItem $DeployDir\OpenJDK*.exe).Name
+Write-Host "Installing $scriptdir\$OpenJDKFilePath"
+Start-Process -FilePath "$DeployDir\$OpenJDKFilePath" -ArgumentList "/S /v/qn" -Verb RunAs -Wait -ErrorAction Stop
+Write-Host "Done installing $scriptdir\$OpenJDKFilePath"
+
+$ini = Get-IniContent("C:\Windows\EQECAT32.INI")
+
+$RqeAppDir = $ini["WORLDCAT ENTERPRISE"]["AppDir"]  # Something like D:\EQECAT\RQE22
+$SnapshotVersion = "{{ snapshot_version }}"
+$RQEVersion = [int]$SnapshotVersion.Split("-")[0]
+
+Remove-Item "$RqeAppDir\_ServerConfig\*.*" | Where-Object { ! $_.PSIsContainer }
+
+# Register all engines
+Write-Host "Registering Engines"
+Set-Location "$RqeAppDir\Analysis"
+start-process -FilePath "EngReg64.bat" -Verb RunAs -Wait -ErrorAction Stop
+Set-Location "$DeployDir"
+Write-Host "Done Registering Engines"
+
+# Install RQE Services
+Write-Host "Registering Services"
+Set-Location "$RqeAppDir"
+if (Test-Path -Path ($RqeAppDir + "\services_install.bat"))
+{
+    start-process -FilePath "services_install.bat" -Verb RunAs -Wait -ErrorAction Stop
+}
+else
+{
+    start-process -FilePath "services_install_D_Drive.bat" -Verb RunAs -Wait -ErrorAction Stop
+}
+Set-Location "$DeployDir"
+Write-Host "Done Registering Services"
+
+# Setup services with proper accounts
+$User = ".\rqe_svc"
+Grant-CPrivilege -Identity $User -Privilege SeServiceLogonRight
+$ptpwd = "{{ rqe_svc_password }}"
+
+Set-ServiceAcctCreds -strServiceName RQE_Tomcat9 -newAcct "$User" -newPass $ptpwd
+Set-ServiceAcctCreds -strServiceName "RQE HTTP Service" -newAcct "$User" -newPass $ptpwd
+Set-ServiceAcctCreds -strServiceName "RQE ICMS Service" -newAcct "$User" -newPass $ptpwd
+
+if ($RQEVersion -ge 23) {
+    Set-Service -Name RQE_Tomcat9 -StartupType Automatic
+    $ServiceName = "RQE HTTP Service"
+    if (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName") {
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name 'Start' -Value '2' -Force
+    }
+    $ServiceName = "RQE ICMS Service"
+    if (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName") {
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name 'Start' -Value '2' -Force
+    }
+}
+
+# Install RQE License
+Configuration InstallNet {
+    Import-DscResource -ModuleName PSDesiredStateConfiguration
+
+    node localhost
+    {
+        Registry RqeLicense {
+            Ensure    = "Present"
+            Key       = "HKEY_LOCAL_MACHINE\SOFTWARE\EQECAT\WORLDCATenterprise"
+            ValueName = "InstallKeyV2"
+            ValueData = "{{ rqe_license }}"
+            ValueType = "String"
+        }
+
+        Registry PxPointDLL {
+            Ensure    = "Present"
+            Key       = "HKEY_LOCAL_MACHINE\SOFTWARE\CoreLogic\Eqecat\PxPoint"
+            ValueName = "DllName"
+            ValueData = "PxPointSC.NET.dll"
+            ValueType = "String"
+        }
+
+        Registry PxPointData {
+            Ensure    = "Present"
+            Key       = "HKEY_LOCAL_MACHINE\SOFTWARE\CoreLogic\Eqecat\PxPoint"
+            ValueName = "DataDir"
+            ValueData = "D:\Program Files\PxPoint\Data\"
+            ValueType = "String"
+        }
+
+        Registry PxPointBin {
+            Ensure    = "Present"
+            Key       = "HKEY_LOCAL_MACHINE\SOFTWARE\CoreLogic\Eqecat\PxPoint"
+            ValueName = "BinDir"
+            ValueData = "D:\Program Files\PxPoint\apiwrappers\dotnet\"
+            ValueType = "String"
+        }
+
+    }
+}
+
+$cd = @{
+    AllNodes = @(
+        @{
+            NodeName                    = 'localhost'
+            PSDscAllowPlainTextPassword = $true
+        }
+    )
+}
+
+InstallNet -ConfigurationData $cd -OutputPath $scriptdir
+Start-DscConfiguration -Path $scriptdir -Verbose -Wait -Force -ErrorAction Stop
+
+# Create windows shares
+# New-SMBShare -Name RqeShared -Path D:\RqeShared -FullAccess Everyone
+
+if(!(Get-SMBShare -Name _ServerConfig -ea 0)){
+    New-SMBShare -Name _ServerConfig -Path "$RqeAppDir\_ServerConfig" -FullAccess Everyone
+}
+
+Add-MpPreference -ExclusionPath "D:\EQECAT" -Verbose
+Add-MpPreference -ExclusionPath "D:\RqeShared" -Verbose
+
+if ($RQEVersion -ge 23) {
+    $Env:RQETemp='D:\RQEShared\RQETemp'
+
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $env:JAVA_HOME = [System.Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
+    
+    Write-Host "Updating RQE Command Line Config files"
+    $RQEConfigFile = [IO.Path]::Combine($RqeAppDir, "RQEServerConfiguratorCmdLineSettings.config")
+    $AppServerName = (Get-CimInstance -ClassName Win32_ComputerSystem).Name
+    Write-Host "AppServerName = $AppServerName"
+    $xml = [xml](Get-Content $RQEConfigFile)
+    $node = $xml.configuration.appSettings.add | Where-Object {$_.key -eq 'ApplicationServerName'}
+    $node.value = $AppServerName
+
+    $node = $xml.configuration.appSettings.add | Where-Object {$_.key -eq 'ServerInstanceDisplay'} # DB Instance
+    $node.value = $AppServerName.replace("-APP", "-DB")
+     
+    $FloodPath = [IO.Path]::Combine($RqeAppDir, "Analysis", "Data", "DATA00", "binf")
+    $node = $xml.configuration.appSettings.add | Where-Object {$_.key -eq 'FloodFilesPath'}
+    $node.value = $FloodPath
+    
+    $ElevationPath = [IO.Path]::Combine($RqeAppDir, "Analysis", "Data", "DATA00", "ElevationEntireUSA", "Elevation")
+    $node = $xml.configuration.appSettings.add | Where-Object {$_.key -eq 'ElevationFilesPath'}
+    $node.value = $ElevationPath
+
+    # $node = $xml.configuration.appSettings.add | Where-Object {$_.key -eq 'SelectedMsSqlVersion'}
+    # $node.value = $MSSqlVersion
+
+    $xml.Save($RQEConfigFile)
+
+    $ClusterConfigFile = [IO.Path]::Combine($RqeAppDir, "ClusterServerCmdLineConfiguration.xml")
+    $xml = [xml](Get-Content $ClusterConfigFile)
+    $node = $xml.Root.Server.ServerName = $AppServerName
+    $numCores = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+    $node = $xml.Root.Server.TotalCoreCount = "$numCores"
+    $node = $xml.Root.Server.AllocatedCoreCount = "$($numCores - 2)"
+    $xml.Save($ClusterConfigFile)
+    
+    $RQEConfigExe = $RqeAppDir + "\RQEServerConfigurator.exe"
+    $proc = Start-Process -FilePath $RQEConfigExe -WorkingDirectory $RqeAppDir -ArgumentList "-a" -Verb RunAs -PassThru
+    $proc | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue -ErrorVariable timeouted
+    if ($timeouted)
+    {
+        $proc | Stop-Process
+    }
+}
+
+# Create RQE Temp
+# [System.Environment]::SetEnvironmentVariable('RQETemp', 'D:\RQEShared\RQETemp', [System.EnvironmentVariableTarget]::Machine)
+
+if (Get-item $SSMS_Path) {
+    $install_path = "`"C:\Program Files (x86)\Microsoft SQL Server Management Studio 18`""
+    $arguments += " /install /quiet /passive /norestart SSMSInstallRoot=$install_path"
+    Start-Process -FilePath $SSMS_Path -ArgumentList $arguments -Wait -ErrorAction Continue
+}
+else {
+    Write-Host "SSMS-Setup-ENU.exe not found. Please check bucket."
+    Exit
+}
+Remove-Item $SSMS_Path -Force -ErrorAction Continue
+
+# Install BCP
+$target = "$DeployDir\MsSqlCmdLnUtils.msi"
+Write-Host "Installing $target"
+Start-Process -FilePath "msiexec" -ArgumentList "/i $DeployDir\MsSqlCmdLnUtils.msi /passive /qn IACCEPTMSSQLCMDLNUTILSLICENSETERMS=YES" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+Write-Host "Done installing $target"
+
+
+Write-Host "All Done"
+

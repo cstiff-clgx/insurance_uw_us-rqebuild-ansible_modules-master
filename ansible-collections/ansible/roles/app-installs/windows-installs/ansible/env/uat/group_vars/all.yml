@@ -1,0 +1,15 @@
+vault_environment: "nonprd"
+organization: "insurance_uw_us"
+ecosystem: "rqebuild"
+temp_dir: 'c:\Temp'
+gcp_env: dev
+
+ansible_user: "admin"
+ansible_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['workstation_winadmin_password_dev']}}"
+ansible_port: 5986
+ansible_connection: winrm
+ansible_winrm_scheme: https
+ansible_winrm_transport: ntlm
+ansible_winrm_server_cert_validation: ignore
+ansible_winrm_read_timeout_sec: 150
+ansible_winrm_operation_timeout_sec: 120

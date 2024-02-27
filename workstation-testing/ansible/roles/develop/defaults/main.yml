@@ -1,0 +1,23 @@
+---
+r_version: "4.3.0"
+r_name: "R-{{ r_version }}-win.exe"
+r_package: "https://cloud.r-project.org/bin/windows/base/{{ r_name }}"
+
+java_openjdk_version: "17.0.1.0.12-1"
+java_openjdk_package: "https://github.com/ojdkbuild/ojdkbuild/releases/download/java-17-openjdk-{{ java_openjdk_version }}/java-17-openjdk-{{ java_openjdk_version }}.win.x86_64.msi"
+
+java_oracle_version: "17"
+java_oracle_package: "https://download.oracle.com/java/{{ java_oracle_version }}/latest/jdk-{{ java_oracle_version }}_windows-x64_bin.msi"
+
+env_vars:
+  - { name: JAVA_HOME, value: 'C:\Program Files\Java\jdk-17.0.1' }
+
+openssh_server_version: "V8.6.0.0p1-Beta"
+openssh_server_name: "OpenSSH-{{ openssh_server_version }}.zip"
+openssh_server_package: "https://github.com/PowerShell/Win32-OpenSSH/releases/download/{{ openssh_server_version }}/OpenSSH-Win64.zip"
+
+dev_firewall:
+  - { name: "OpenSSH", port: "22", protocol: "tcp" }
+
+sts_name: "sts"
+sts_url: "https://dist.springsource.com/release/STS/3.9.12.RELEASE/dist/e4.15/spring-tool-suite-3.9.12.RELEASE-e4.15.0-win32-x86_64.zip"

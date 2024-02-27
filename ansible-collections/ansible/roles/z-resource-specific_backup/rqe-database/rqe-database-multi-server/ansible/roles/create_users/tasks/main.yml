@@ -1,0 +1,11 @@
+- name: Create database accounts
+  win_user:
+    name: "{{ item.user}}"
+    password: "{{ item.password }}"
+    password_never_expires: true
+    state: present
+    groups:
+      - Administrators
+  loop: "{{ database_users }}"
+  loop_control:
+    label: "{{ item.user }}"

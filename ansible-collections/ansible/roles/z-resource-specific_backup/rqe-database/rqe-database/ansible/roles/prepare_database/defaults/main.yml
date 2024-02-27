@@ -1,0 +1,25 @@
+database_regedit:
+      - { name: "MaxIdleTime", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "5200000"}
+      - { name: "MaxDisconnectionTime", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "21600000"}
+      - { name: "RemoteAppLogoffTimeLimit", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "0"}
+      - { name: "fResetBroken", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services', value: "0"}
+      - { name: "NoAutoUpdate", path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU', value: "1"}
+      - { name: "TcpTimedWaitDelay", path: 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters', value: "30"}
+      - { name: "MaxUserPort", path: 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters', value: "32767"}
+      
+wce_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['wce_db_pass']}}"
+rqe_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['rqe_user_pass']}}"
+rqe_svc_password: "{{ lookup('hashi_vault', 'secret={{ vault_environment }}/{{ organization }}/secret/data/{{ ecosystem }}/iac')['data']['rqe_svc_user_pass']}}"
+
+database_firewall:
+      - { name: "SQL Server", port: "1433", protocol: "tcp"}
+      - { name: "SQL Admin Connection", port: "1434", protocol: "tcp"}
+      - { name: "SQL Database Management", port: "1434", protocol: "udp"}
+      - { name: "EQESysUtil", port: "5975", protocol: "tcp"}
+      - { name: "SSH", port: "22", protocol: "tcp"}
+
+database_users:
+      - { user: "rqe", password: "{{ rqe_password }}" }
+      - { user: "rqe_svc", password: "{{ rqe_svc_password }}" }
+
+temp_dir: 'c:\Temp'

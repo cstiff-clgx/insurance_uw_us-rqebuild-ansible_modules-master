@@ -1,0 +1,14 @@
+---
+- name: Install Common Workstation
+  hosts: _develop,_qa
+  gather_facts: no
+  become_method: runas
+  roles:
+    - { role: common, tags: [common] }
+
+- name: Install Develop Workstation
+  hosts: _develop
+  gather_facts: no
+  become_method: runas
+  roles:
+    - { role: develop, tags: [develop] }

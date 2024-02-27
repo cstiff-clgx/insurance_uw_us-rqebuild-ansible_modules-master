@@ -1,0 +1,19 @@
+- name: Debug
+  debug: 
+    msg: "{{ snapshot_version }} ==> {{ rqe_license_key }}"
+
+- name: Debug
+  debug: 
+    msg: "{{ rqe_license_key }} ==> {{ rqe_license }}"
+
+- name: Create application accounts
+  win_user:
+    name: "{{ item.user}}"
+    password: "{{ item.password }}"
+    password_never_expires: true
+    state: present
+    groups:
+      - Administrators
+  loop: "{{ application_users }}"
+  loop_control:
+    label: "{{ item.user }}"

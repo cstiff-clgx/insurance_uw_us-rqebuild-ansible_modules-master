@@ -1,0 +1,5 @@
+openssh_server_version: "V8.6.0.0p1-Beta"
+openssh_server_name: "OpenSSH-{{ openssh_server_version }}.zip"
+openssh_server_package: "https://github.com/PowerShell/Win32-OpenSSH/releases/download/{{ openssh_server_version }}/OpenSSH-Win64.zip"
+
+zip_url: 'https://www.7-zip.org/a/7z2107-x64.exe'

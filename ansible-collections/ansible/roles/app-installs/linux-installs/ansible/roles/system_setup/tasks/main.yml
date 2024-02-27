@@ -1,0 +1,59 @@
+- name: Set Config
+  set_fact:
+    prefix: "{{ lookup('env', 'HOST') }}"
+
+- name: Format /dev/sdb if not already formatted
+  shell: |
+    if ! lsblk -o NAME,FSTYPE | grep sdb | grep ext4; then
+      sudo mkfs.ext4 -q /dev/sdb
+    fi
+  args:
+    executable: /bin/bash
+
+- name: Modify /etc/fstab
+  shell: |
+    disk_name="/dev/sdb"
+    echo "Disk: $disk_name"
+    if [[ -e "$disk_name" ]]; then
+      echo "Found it!!!"
+      if [[ ! -d /data ]]; then
+          echo "Creating /data"
+          sudo mkdir -p /data
+          sudo chmod a+rwx /data
+      fi
+
+      DATA_MOUNT=$(cat /etc/fstab | grep -E "/data[[:space:]]+ext4")
+      # if /data is not in /etc/fstab - add it and reboot
+      if [[ -z $DATA_MOUNT ]]; then
+          echo "Mounting in /data"
+          UUID=$(sudo blkid | grep "$disk_name" | sed -e 's/^.*UUID=\"\(.*\)\" BL.*/\1/')
+          sudo echo "UUID=$UUID /data ext4 rw,relatime 0 0" >> /etc/fstab
+          sudo mount UUID=$UUID /data
+      fi
+
+      if [[ ! -d /data/home ]]; then
+          echo "creating /data/home"
+          sudo mkdir -p /data/home
+          sudo chmod go+rx /data/home
+          sudo chmod u+rwx /data/home
+      fi
+
+      DATA_HOME=$(cat /etc/fstab | grep "/data/home")
+      if [[ -z $DATA_HOME ]]; then
+          echo "redirecting /data/home"
+          # redirect the ~
+          sudo echo "/data/home  /home    none    bind   0   0" >> /etc/fstab
+          #sudo mount --bind /data/home /home
+      fi
+    fi
+  register: output
+  args:
+    executable: /bin/bash
+
+- debug: msg="{{ output.stdout }}"
+
+- debug: msg="{{ output.stderr }}"
+
+- name: Reboot a machine that takes time to settle after being booted
+  reboot:
+    post_reboot_delay: 120

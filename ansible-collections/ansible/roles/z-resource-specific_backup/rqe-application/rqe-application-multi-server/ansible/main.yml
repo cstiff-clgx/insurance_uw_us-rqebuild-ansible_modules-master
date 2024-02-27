@@ -1,0 +1,26 @@
+- name: Configure rqe application host
+  hosts: "{{ lookup('env', 'PREFIX') }}-*"
+  vars:
+    snapshot_version: "{{ lookup('env', 'APP_VERSION') }}"
+    prefix: "{{ lookup('env', 'PREFIX') }}"
+    depl_env: "{{ lookup('env', 'ENV') }}"
+    zone: "{{ lookup('env', 'DB_ZONE') }}"
+    database_project: "{{ lookup('env', 'DB_PROJECT') }}"
+    temp_dir: 'c:\Temp'
+  
+  roles:
+    - {role: windisk_partition, tags: [application, partition], when: snapshot_version == 'na'}
+    - {role: windisk_extend_c}
+    - {role: create_users}
+    - {role: install_ps_modules}
+    - {role: hosts_update}
+    - {role: wait_on_database}
+    - {role: application_prep}
+    - {role: application_setup, tags: [application, setup], when: snapshot_version != 'na'}
+    - {role: openssh}
+
+
+  tasks:
+    - name: Reboot server
+      win_reboot:
+        post_reboot_delay: 120

@@ -1,0 +1,111 @@
+[string]$scriptpath = $MyInvocation.MyCommand.Path
+[string]$scriptdir = Split-Path $Scriptpath
+
+$DBVER = "{{ DBVER }}"
+Write-Host "MSSQL Version: $DBVER"
+
+# Download the DSC Module
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Import-Module Carbon
+Write-Host "Installed all .ps modules."
+
+$DeployDir = $scriptdir
+Set-Location -Path $DeployDir
+$Source_Bucket = 'gs://clgx-rqebuild-app-dev-software'
+
+Start-Transcript -Path "$DeployDir/database_setup.log"
+
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/DB/sqlncli.msi" . 2>&1
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/DB/SQLSysClrTypes.msi" . 2>&1
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/DB/SharedManagementObjects.msi" . 2>&1
+gsutil -m cp -r "$Source_Bucket/RQE{{ snapshot_version }}/DB/DBInstaller" . 2>&1
+gsutil cp "$Source_Bucket/RQE{{ snapshot_version }}/DB/rqeclr.sql" . 2>&1
+Switch ($DBVER) {
+    "2022" { gsutil cp "$Source_Bucket/MSSQL/SQLServer2022*.exe" . 2>&1 }
+    "2019" { gsutil cp "$Source_Bucket/MSSQL/SQLServer2019*.exe" . 2>&1 }
+    default { gsutil cp "$Source_Bucket/MSSQL/SQLServer2017*.exe" . 2>&1 }
+}
+
+Start-Process -FilePath "msiexec" -ArgumentList "/i $DeployDir\sqlncli.msi /qn IACCEPTSQLNCLILICENSETERMS=YES" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+Start-Process -FilePath "msiexec" -ArgumentList "/i $DeployDir\SQLSysClrTypes.msi /qn" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+Start-Process -FilePath "msiexec" -ArgumentList "/i $DeployDir\SharedManagementObjects.msi /qn" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+
+$MajorVersion = "RQE{{ snapshot_version }}".Substring(0, 5)
+Write-Host "MajorVersion: $MajorVersion"
+
+# Install Services
+Copy-Item "$DeployDir\DBInstaller" "C:\Program Files (x86)\EQECAT\$MajorVersion Database Installer" -Recurse -Force
+
+$src_sql = "$DeployDir\DBInstaller\SQL Server Files\RQECLR_DeploymentScript.sql"
+$content = ""
+Switch ($DBVER) {
+    "2022" {
+        $content = (Get-Content -path $src_sql -Raw) -replace '@dllpath', 'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Binn\RQECLR.dll'
+        Copy-Item "$DeployDir\DBInstaller\SQL Server Files\RQECLR.dll" "C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Binn" -Verbose
+        Copy-Item "$DeployDir\DBInstaller\DotNetZip.dll" "C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Binn" -Verbose
+    }
+    "2019" {
+        $content = (Get-Content -path $src_sql -Raw) -replace '@dllpath', 'C:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\Binn\RQECLR.dll'
+        Copy-Item "$DeployDir\DBInstaller\SQL Server Files\RQECLR.dll" "C:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\Binn" -Verbose
+        Copy-Item "$DeployDir\DBInstaller\DotNetZip.dll" "C:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\Binn" -Verbose
+    }
+    default {
+        $content = (Get-Content -path $src_sql -Raw) -replace '@dllpath', 'C:\Program Files\Microsoft SQL Server\MSSQL14.MSSQLSERVER\MSSQL\Binn\RQECLR.dll'
+        Copy-Item "$DeployDir\DBInstaller\SQL Server Files\RQECLR.dll" "C:\Program Files\Microsoft SQL Server\MSSQL14.MSSQLSERVER\MSSQL\Binn" -Verbose
+        Copy-Item "$DeployDir\DBInstaller\DotNetZip.dll" "C:\Program Files\Microsoft SQL Server\MSSQL14.MSSQLSERVER\MSSQL\Binn" -Verbose
+    }
+}
+[IO.File]::WriteAllText("$DeployDir\rqeclr.sql", $content)
+
+$fileStructure = New-Object System.Collections.Specialized.StringCollection
+$fileStructure.Add("D:\RqeDatabases\System\EqecatSystem.mdf")
+Mount-DbaDatabase -SqlInstance localhost -FileStructure $fileStructure -Database EqecatSystem
+
+$fileStructure = New-Object System.Collections.Specialized.StringCollection
+$fileStructure.Add("D:\RqeDatabases\Common\EqecatCommon.mdf") 
+Mount-DbaDatabase -SqlInstance localhost -FileStructure $fileStructure -Database EqecatCommon
+
+# Complete mount
+Start-Sleep -Seconds 3
+
+Restart-DbaService -ComputerName localhost -InstanceName MSSQLSERVER -Type Engine -Force
+
+# Wait for the MSSQL to finish spinnig up
+Start-Sleep -Seconds 15
+
+$wceCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList 'wce', (ConvertTo-SecureString -AsPlainText -Force -String "{{ wce_password }}")
+$saCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList 'sa', (ConvertTo-SecureString -AsPlainText -Force -String "{{ rqe_svc_password }}")
+
+Invoke-DbaQuery -SqlInstance localhost -Query 'GRANT UNSAFE ASSEMBLY TO [wce];' -Database master -Verbose -SqlCredential $saCredential
+Invoke-DbaQuery -SqlInstance localhost -Query 'ALTER DATABASE [EqecatSystem] SET TRUSTWORTHY ON;' -Database master -Verbose -SqlCredential $saCredential
+
+Invoke-DbaQuery -SqlInstance localhost -Query "EXEC sys.sp_add_trusted_assembly @hash = 0x1C21A075C351457826B83AF2C9251D2164E64CF07CEAAA71DD5A1AB2418C9C6ADA40B7DBCDAAA472FE9F06419FAF65577B140E1527FAD24F4B7B4EFE428F52F5 , @description = N'dotnetzip, version=1.15.0.0, culture=neutral, publickeytoken=6583c7c814667745, processorarchitecture=msil';" -Database EqecatSystem -Verbose -SqlCredential $wceCredential
+Invoke-DbaQuery -SqlInstance localhost -Query "EXEC sys.sp_add_trusted_assembly @hash = 0x09F0E360DD8452442AAAFC482BDBA6170A2C4D5AD4502AB36EFBA7BCB584C5A016DBEBE993F6C716572D752398BDD7AB36016D080DF57047BB0EB1C397E8953E , @description = N'rqeclr, version=0.0.0.0, culture=neutral, publickeytoken=null, processorarchitecture=msil';" -Database EqecatSystem -Verbose  -SqlCredential $wceCredential
+
+Invoke-DbaQuery -SqlInstance localhost -File "$DeployDir\rqeclr.sql" -Database EqecatSystem -Verbose -SqlCredential $wceCredential
+Invoke-DbaQuery -SqlInstance localhost -Query "delete from EqecatCommon..CFldrInfo" -Database EqecatCommon -Verbose -SqlCredential $wceCredential
+
+# TODO: For now DO NOT attach any databases in "D:\RqeDatabases\UserDatabases\EDB", "D:\RqeDatabases\UserDatabases\IDB", and "D:\RqeDatabases\UserDatabases\RDB"
+
+# Register the EqeSysUtilService service...
+
+$params = @{
+    Name           = "RQE EqeSysUtilService"
+    DisplayName    = "RQE EqeSysUtilService"
+    BinaryPathName = "`"C:\Program Files (x86)\EQECAT\$MajorVersion Database Installer\EqeSysUtil\EqeSysUtilService.exe`" -p 5975" 
+    StartupType    = "Automatic"
+    Description    = "This the RQE EqeSysUtilService"
+}
+New-Service @params
+Start-Service "RQE EqeSysUtilService"
+
+Add-MpPreference -ExclusionPath "D:\RqeDatabases" -Verbose
+
+$HotFix = Get-ChildItem "SQLServer*.exe" | Select-Object -First 1 -ExpandProperty FullName
+if ($null -ne $HotFix) {
+    Write-Host "Found MSSQL HotFix: $HotFix"
+    # Start-Process -FilePath $HotFix -ArgumentList "/qs /IAcceptSQLServerLicenseTerms /Action=Patch /AllInstances" -Verb RunAs -Wait -ErrorAction Stop -Verbose
+}
+
+Write-Host "All Done"
+Stop-Transcript

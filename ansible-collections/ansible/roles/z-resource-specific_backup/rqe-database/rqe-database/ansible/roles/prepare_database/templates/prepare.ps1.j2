@@ -1,0 +1,128 @@
+[string]$scriptpath = $MyInvocation.MyCommand.Path
+[string]$scriptdir = Split-Path $Scriptpath
+
+# Download the DSC Module
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Import-Module Carbon
+
+$DBVER = "{{ DBVER }}"
+Write-Host "MSSQL Version: $DBVER"
+
+$DeployDir = $scriptdir
+Set-Location -Path $DeployDir
+Start-Transcript -Path "$DeployDir/database_prep.log"
+
+$Source_Bucket = 'gs://clgx-rqebuild-app-dev-software'
+# TODO: Make the below installation a variable based on SQL Server Version
+
+$SQLServer_iso_name = "en_sql_server_2017_developer_x64_dvd_11296168.iso"
+$SQLServer_config_name = "SQL2017_Config.ini"
+$SQL_SourceBase = "$Source_Bucket/MSSQL"
+
+switch ($DBVER) {
+    "2022" {
+        $SQLServer_iso_name = "enu_sql_server_2022_developer_edition_x64_dvd_7cacf733.iso"
+        $SQLServer_config_name = "SQL2017_Config.ini"
+    }
+    "2019" {
+        $SQLServer_iso_name = "en_sql_server_2019_developer_x64_dvd_baea4195.iso"
+        $SQLServer_config_name = "SQL2017_Config.ini"
+    }
+    Default {}
+}
+
+
+$SQL_iso = "$DeployDir\$SQLServer_iso_name"
+$SSMS_Path = "$DeployDir\SSMS-Setup-ENU.exe"
+if (!(Test-Path $SQL_iso)) {
+    Write-Host "Downloading SQL Server ISO and related files from GCS"
+    gsutil -m cp "$SQL_SourceBase/$SQLServer_iso_name" $DeployDir
+    gsutil cp "$SQL_SourceBase/SQL_2017/$SQLServer_config_name" $DeployDir
+    gsutil -m cp "$SQL_SourceBase/SSMS-Setup-ENU.exe" $DeployDir
+    Write-Host "Finished downloading SQL Server ISO and related files from GCS"
+}
+else {
+    Write-Host "NOT downloading $SQL_iso"
+}
+
+if (Get-item "$SQL_iso") {
+    Write-Host "Setting up MSSQL"
+    $mountResult = Mount-DiskImage -ImagePath $SQL_iso -PassThru
+    $volumeInfo = $mountResult | Get-Volume
+    $driveInfo = Get-PSDrive -Name $volumeInfo.DriveLetter
+    # Install SQL Server
+    $arguments = "/ACTION=Install /CONFIGURATIONFILE=$DeployDir\$SQLServer_config_name /SAPWD='{{ rqe_svc_password }}' /IACCEPTSQLSERVERLICENSETERMS /Q /ASSYSADMINACCOUNTS='.\rqe'"
+    Start-Process -FilePath (Join-Path -Path $driveInfo.Root -ChildPath 'setup.exe') -ArgumentList $arguments -RedirectStandardError "$DeployDir\SqlSetupErrors.txt" -RedirectStandardOutput "$DeployDir\SqlSetupOutput.txt" -Wait
+    
+    Write-Host "Done setting up MSSQL" 
+
+    Dismount-DiskImage -ImagePath $SQL_iso
+    Write-Host "Image dismounted"
+}
+else {
+    Write-Host "SQL Server ISO doesn't exist. Please check bucket."
+    Exit
+}
+
+Set-DbatoolsConfig -Name Import.EncryptionMessageCheck -Value $false -PassThru
+Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -Register
+
+# Cleanup
+Remove-Item $SQL_iso -Force -ErrorAction Continue
+Remove-Item $DeployDir\$SQLServer_config_name -Force -ErrorAction Continue
+
+#Set the maxdop based on recommend value
+Set-DbaMaxDop -SqlInstance localhost -MaxDop 2
+
+# Create wce user in the database
+$wcePassword = ConvertTo-SecureString -AsPlainText -Force -String "{{ wce_password }}"
+New-DbaLogin -SqlInstance localhost -Login wce -SecurePassword $wcePassword -Verbose -Force
+Set-DbaLogin -SqlInstance localhost -Login wce -Unlock -AddRole sysadmin -Force
+
+$saPassword = ConvertTo-SecureString -AsPlainText -Force -String "{{ rqe_svc_password }}"
+$saCred = New-Object System.Management.Automation.PSCredential ("sa", $saPassword)
+Set-DbaLogin -SqlInstance localhost -Login sa -Unlock -SecurePassword $saCred -Force
+
+Set-DbaSpConfigure -SqlInstance localhost -Name XPCmdShellEnabled -Value 1
+Set-DbaSpConfigure -SqlInstance localhost -Name IsSqlClrEnabled -Value 1
+Set-DbaSpConfigure -SqlInstance localhost -Name RemoteQueryTimeout -Value 0
+Set-DbaSpConfigure -SqlInstance localhost -Name RemoteAccess -Value 1
+Set-DbaSpConfigure -SqlInstance localhost -Name AdHocDistributedQueriesEnabled -Value 1
+Set-DbaSpConfigure -SqlInstance localhost -Name MaxWorkerThreads -Value 7000
+
+# Restart SQL Server to apply settings
+Restart-DbaService -ComputerName localhost -InstanceName MSSQLSERVER -Type Engine -Force
+Start-Sleep -Seconds 15
+
+Function Set-ServiceAcctCreds([string]$strServiceName, [string]$newAcct, [string]$newPass) {
+    $filter = 'Name=' + "'" + $strServiceName + "'" + ''
+    $service = Get-WMIObject -namespace "root\cimv2" -class Win32_Service -Filter $filter
+    if ($NULL -ne $Service) {
+        $service.Change($null, $null, $null, $null, $null, $null, $newAcct, $newPass)
+    }
+}
+
+$User = ".\rqe_svc"
+Grant-CPrivilege -Identity $User -Privilege SeServiceLogonRight
+
+# Setup services with proper accounts
+$ptpwd = "{{ rqe_svc_password }}"
+Set-ServiceAcctCreds -strServiceName MSSQLSERVER -newAcct "$User" -newPass $ptpwd
+Restart-DbaService -ComputerName localhost -InstanceName MSSQLSERVER -Type Engine -Force
+Start-Sleep -Seconds 15
+
+# Install SSMS
+if (Get-item $SSMS_Path) {
+    $install_path = "`"C:\Program Files (x86)\Microsoft SQL Server Management Studio 18`""
+    $arguments += " /install /quiet /passive /norestart SSMSInstallRoot=$install_path"
+    Start-Process -FilePath $SSMS_Path -ArgumentList $arguments -Wait -ErrorAction Continue
+}
+else {
+    Write-Host "SSMS-Setup-ENU.exe not found. Please check bucket."
+    Exit
+}
+Remove-Item $SSMS_Path -Force -ErrorAction Continue
+
+Write-Host "All Done"
+
+Stop-Transcript

@@ -1,0 +1,35 @@
+- name: Create tsms data disk VG
+  lvg:
+    vg: "{{ tsmsdb_data_drive_vg_name }}"
+    pvs: "{{ tsmsdb_data_drive_devices | join(',') }}"
+    state: present
+
+- name: Resize (grow) PVs if underlying device has free space
+  shell: pvresize -v "{{ tsmsdb_data_drive_devices | join(' ') }}"
+
+- name: Create tsms data disk LV
+  lvol:
+    lv: "{{ tsmsdb_data_drive_lv_name }}"
+    vg: "{{ tsmsdb_data_drive_vg_name }}"
+    size: "100%VG"
+    active: yes
+    state: present
+
+- name: Create tsms data disk filesystem
+  filesystem:
+    dev: "/dev/{{ tsmsdb_data_drive_vg_name }}/{{ tsmsdb_data_drive_lv_name }}"
+    fstype: ext4
+    resizefs: yes
+
+- name: Create tsms data disk mount point
+  file:
+    path: "{{ tsmsdb_data_drive_path }}"
+    mode: 0777
+    state: directory
+
+- name: Mount tsms data disk
+  mount:
+    fstype: ext4
+    path: "{{ tsmsdb_data_drive_path }}"
+    src: "/dev/{{ tsmsdb_data_drive_vg_name }}/{{ tsmsdb_data_drive_lv_name }}"
+    state: mounted
