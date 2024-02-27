@@ -1,7 +1,0 @@
----
-# This playbook is for the universal Ansible Modules
-
-- name: Ansible Modules 
-  hosts: localhost
-  roles:  
-    - insurance_uw_us-rqebuild-pipeline-iac/ansible-modules
